@@ -1,15 +1,15 @@
 /// <reference path="../weather.ts" />
 
 namespace PE.Battle {
-  const CHARACTERS_PER_LINE = 50;
+  const CHARACTERS_PER_LINE = 40;
 
   interface IBattleEvent { name: string, params: any[] };
 
-  export const enum Phase { None, Init, ActionSelection, MoveSelection };
+  export const enum Phase { None, Init, ActionSelection, MoveSelection, Animation };
   export const enum WaitMode { None, Animation, AbilitySing };
-  export const enum Choice { UseMove, UseItem, Switch };
+  export const enum ActionChoices { UseMove, UseItem, Switch };
 
-  export const enum Enviroments { None, TallGrass, Cave, StillWater };
+  export const enum Enviroments { None, TallGrass, Cave, StillWater, Building, Plain, Sand, Rock, LongGrass, PondWater, SeaWater, UnderWater };
 
   export abstract class Manager {
 
@@ -54,10 +54,13 @@ namespace PE.Battle {
     static turncount = 0;
     static waitMode = WaitMode.None;
 
+    static started = false;
 
-    static setup(allies: Trainers.Trainer[], opponets: Trainers.Trainer[]) {
+
+    static setup(opponets: Trainers.Trainer[], allies: Trainers.Trainer[]) {
+      allies.unshift($Player);
       this.trainers = { player: allies, foe: opponets };
-      this.player = allies[0];
+      this.player = $Player;
       this.opponents = opponets;
       this.field = new ActiveField();
       this.sides = { player: new ActiveSide(), foe: new ActiveSide() };
@@ -74,7 +77,7 @@ namespace PE.Battle {
           battler.sides.foe = this.sides.foe;
         }
         this.actives.push(this.battlers[firstIndex]);
-        this.sides.player.actives.push(this.battlers[firstIndex].index);
+        this.sides.player.actives.push(this.battlers[firstIndex]);
       }
       for (const trainer of opponets) {
         let firstIndex = this.battlers.length;
@@ -87,7 +90,7 @@ namespace PE.Battle {
           battler.sides.foe = this.sides.player;
         }
         this.actives.push(this.battlers[firstIndex]);
-        this.sides.foe.actives.push(this.battlers[firstIndex].index);
+        this.sides.foe.actives.push(this.battlers[firstIndex]);
       }
       this.partyOrder = [];
       for (const pokemon of this.player.battlers) {
@@ -107,6 +110,9 @@ namespace PE.Battle {
 
       this.phase = Phase.Init;
       this.currentInx = 0;
+
+      UI.actionsInx = 0;
+      UI.movesInx = 0;
     }
 
     //==================================================================================================================
@@ -131,7 +137,11 @@ namespace PE.Battle {
     }
 
     static isUnlosableItem(pokemon: Battler, item) {
+      throw Error('Not Implemented');
+    }
 
+    static canChooseNonActive(...args) {
+      throw Error('Not Implemented');
     }
 
     static checkGlobalAbility(ability: Abilitydex) {
@@ -194,8 +204,8 @@ namespace PE.Battle {
         }
       }
       if (pokemon.effects.Imprison) {
-        for (const index of this.sides.foe.actives) {
-          if (this.battlers[index].hasMove(move.id)) {
+        for (const battler of this.sides.foe.actives) {
+          if (battler.hasMove(move.id)) {
             this.showMessage(i18n._("%1 can't use the sealed %2!", pokemon.name, move.name));
             return false;
           }
@@ -249,7 +259,7 @@ namespace PE.Battle {
         this.canChooseMove(pokemon.index, pokemon.effects.EncoreMoveId, false)) {
         console.log(`[Auto choosing Encore move] ${pokemon.effects.EncoreMoveId}`);
         this.choices = {
-          action: Choice.UseMove,
+          action: ActionChoices.UseMove,
           move: pokemon.effects.EncoreMoveId,
           target: pokemon.sides.foe.actives[0]
         }
@@ -259,11 +269,12 @@ namespace PE.Battle {
       let speeds = [];
       let mPriorities = [];
       let priorityQueue = [];
-      for (let i = 0; i < this.actives.length; i++) {
-        const pokemon = this.actives[i];
+      for (const pokemon of this.actives) {
         speeds.push(pokemon.speed);
         priorityQueue.push(pokemon.index);
-        if (this.choices[pokemon.index] && this.choices[i].action === "USE_MOVE") mPriorities.push(this.choices[i].move.priority)
+        if (this.choices[pokemon.index] && this.choices[pokemon.index].action === ActionChoices.UseMove) {
+          mPriorities.push(this.choices[pokemon.index].move.priority)
+        }
       }
       // order the speeds, mPriorities and priority arrays (bubble sort) by speeds
       let swapped;
@@ -300,9 +311,6 @@ namespace PE.Battle {
           }
         }
       } while (swapped);
-
-      console.log("Priority Queue");
-      console.log(priorityQueue);
       return priorityQueue;
     }
     //endregion
@@ -316,6 +324,15 @@ namespace PE.Battle {
 
     static canSwitch(currIndex, switchingIndex, showMessages, ignoreMeanLook = false) {
       // let currPokemon =
+      return true;
+    }
+
+    static switchIn(index: number) {
+      this.choices[this.currentInx] = ({
+        action: ActionChoices.Switch,
+        index: index
+      })
+      this.runActions();
     }
     //==================================================================================================================
 
@@ -325,8 +342,9 @@ namespace PE.Battle {
       $Battle.showMessage(i18n._('Go %1!', this.trainers.player[0].party[0].name));
       let priority = this.getPriority();
       for (const index of priority) {
-        Abilities.onSwitchInEffects(this.battlers[index], true);
+        Abilities.OnSwitchInEffects(this.battlers[index], true);
       }
+      this.push(() => this.started = true);
     }
 
     static update() {
@@ -338,14 +356,14 @@ namespace PE.Battle {
       return $gameMessage.isBusy() || this.waitMode !== WaitMode.None;
     }
 
-    static push(method) {
-      this._queue.push(method);
+    static push(method, scope: any = this) {
+      this._queue.push({ method: method, scope: scope });
     }
 
     static pop() {
       if (this._queue.length <= 0) return;
-      let method = this._queue.shift();
-      method.apply(this);
+      let action = this._queue.shift();
+      action.method.apply(action.scope);
     }
 
     static terminate() {
@@ -355,6 +373,11 @@ namespace PE.Battle {
 
     static clear() {
       this._queue = [];
+      this.actives = [];
+      $Player.battlers = [];
+      this.started = false;
+      UI.actionsInx = 0;
+      UI.movesInx = 0;
       this.clearWeather();
     }
 
@@ -366,7 +389,7 @@ namespace PE.Battle {
           let truncateIndex = Math.min(line.length, line.lastIndexOf(" "));
           line = line.substring(0, truncateIndex);
           $gameMessage.add(line + '\\n');
-          msg = msg.substring(truncateIndex);
+          msg = msg.substring(truncateIndex + 1);
         }
         $gameMessage.add(msg + '\\|\\^');
       });
@@ -378,22 +401,18 @@ namespace PE.Battle {
         while (msg.length > CHARACTERS_PER_LINE) {
           let line = msg.substring(0, CHARACTERS_PER_LINE);
           let truncateIndex = Math.min(line.length, line.lastIndexOf(" "));
-          line = line.substring(0, truncateIndex);
+          line = line.substring(0, truncateIndex + 1);
           $gameMessage.add(line + '\\n');
-          msg = msg.substring(truncateIndex);
+          msg = msg.substring(truncateIndex + 1);
         }
         $gameMessage.add(msg);
       });
     }
 
     static changePhase(phase: Phase) {
+      console.log(phase)
       this.push(() => this.phase = phase);
     }
-
-
-
-
-
 
 
     static runActions() {
@@ -403,20 +422,38 @@ namespace PE.Battle {
         if (this.choices[battler.index]) continue;
         this.choices[battler.index] = (DummySelection(battler));
       }
+
       let priority = this.getPriority();
+
+      for (const index of priority) {
+        let choice = this.choices[index];
+        if (choice.action === ActionChoices.Switch) {
+          let out = this.actives[this.currentInx];
+          let enter = this.battlers[choice.index];
+          this.actives[this.currentInx] = enter;
+          out.sides.own.actives[this.currentInx] = enter;
+          Abilities.OnSwitchInEffects(enter, true);
+        }
+      }
+
+
       // use moves
       for (const index of priority) {
-        if (this.battlers[index].isFainted()) continue;
+        let user = this.battlers[index];
+        if (user.isFainted()) continue;
         let choice = this.choices[index];
-        let target = this.battlers[choice.target];
-        console.log(`${this.battlers[index].name} Speed: ${this.battlers[index].speed}`);
-        console.log(`${this.battlers[index].name} used ${choice.move.name}, move priority: ${choice.move.priority}`);
-        this.showMessage(i18n._('%1 used %2', this.battlers[index].name, choice.move.name));
-        let d = this.getDamage(this.battlers[index], target, choice.move);
-        if (d > 0) {
-          this.battlers[choice.target].damage(d);
-          console.log(`Damage: ${d}`);
-          console.log(`${target.name} HP: ${target.totalhp} --> ${target.hp}`);
+        let target = user.sides.foe.actives[choice.target];
+        if (choice.action === ActionChoices.UseMove) {
+          console.log(`${user.name} Speed: ${user.speed}`);
+          console.log(`${user.name} used ${choice.move.name}, move priority: ${choice.move.priority}`);
+          this.showMessage(i18n._('%1 used %2', user.name, choice.move.name));
+          let d = this.getDamage(user, target, choice.move);
+          if (d > 0) {
+            // target.damage(d)
+            this.push(() => target.damage(d));;
+            // console.log(`Damage: ${d}`);
+            // console.log(`${target.name} HP: ${target.totalhp} --> ${target.hp}`);
+          }
         }
       }
       this.changePhase(Phase.ActionSelection);
@@ -466,10 +503,10 @@ namespace PE.Battle {
 
 
     static choose(move, target) {
-      this.choices[this.currentInx] = {
-        action: "USE_MOVE",
+      this.choices[this.actives[this.currentInx].index] = {
+        action: ActionChoices.UseMove,
         move: move,
-        target: target
+        target: 0
       }
     }
 
@@ -505,17 +542,29 @@ namespace PE.Battle {
       this.weatherDuration = 0;
     }
 
+    static nextPickupUse(): string {
+      throw Error('not implemented')
+    }
+
+    static recoverHPAnimation(index: number) {
+      this.push(() => {
+        this.battlers[index].hpbar.start();
+        this.waitMode = WaitMode.Animation;
+        this.phase = Phase.Animation;
+      });
+    }
+
 
   }
 }
 
-let $Battle = PE.Battle.Manager;
+const $Battle = PE.Battle.Manager;
 
 
 function DummySelection(battler: PE.Battle.Battler) {
   return {
-    action: PE.Battle.Choice.UseMove,
+    action: PE.Battle.ActionChoices.UseMove,
     move: battler.moveset[0],
-    target: battler.sides.foe.actives[0]
+    target: 0
   };
 }

@@ -70,8 +70,8 @@ namespace PE.Battle {
     ParentalBond?: number,
     PerishSong?: number,
     PerishSongUser?: number,
-    PickupItem?: number,
-    PickupUse?: number,
+    PickupItem?: string,
+    PickupUse?: string,
     Pinch?: boolean,
     Powder?: boolean,
     PowerTrick?: boolean,
@@ -103,6 +103,7 @@ namespace PE.Battle {
     Truant?: boolean,
     TwoTurnAttack?: number,
     Type3?: Types,
+    /** check if an item is used or lost.*/
     Unburden?: boolean,
     Uproar?: number,
     Uturn?: boolean,
@@ -133,7 +134,7 @@ namespace PE.Battle {
   }
 
   export class Battler {
-    private _name: string;
+    hpbar: UI.HPBar;
     private _hp = 0;
     private _totalHP = 0;
     private _attack: number;
@@ -143,6 +144,7 @@ namespace PE.Battle {
     private _speed: number;
     private _fainted = false;
     private _captured = false;
+    nickname: string;
     totalhp: number;
 
     ability: string;
@@ -151,6 +153,7 @@ namespace PE.Battle {
     forme: any;
     gender: any;
     item: string;
+    itemInitial: string;
     ivs: { hp: number; atk: number; def: number; spa: number; spd: number; spe: number; };
     lastAttacker: {};
     lastHPLost: number;
@@ -189,7 +192,7 @@ namespace PE.Battle {
 
     initPokemon(pokemon: Pokemon.Pokemon) {
       // if (pokemon.isEgg()) throw Error("An egg can't be an active Pokémon");
-      this._name = pokemon.name;
+      this.nickname = pokemon.name;
       this.species = pokemon.species;
       this.level = pokemon.level;
       this._hp = pokemon.stats.hp;
@@ -336,8 +339,8 @@ namespace PE.Battle {
       this.effects.Nightmare = false;
       this.effects.Outrage = 0;
       this.effects.ParentalBond = 0;
-      this.effects.PickupItem = 0;
-      this.effects.PickupUse = 0;
+      this.effects.PickupItem = "";
+      this.effects.PickupUse = "";
       this.effects.Pinch = false;
       this.effects.Powder = false;
       this.effects.Protect = false;
@@ -399,9 +402,9 @@ namespace PE.Battle {
       if (this.isFainted()) return;
       if ($Battle.isOpposing(this.index)) {
         // Just the player Pokémon will gain epx
-        for (const index of this.sides.foe.actives) {
-          if (!(index in this.participants) && !$Battle.battlers[index].isFainted()) {
-            this.participants.push(index);
+        for (const battler of this.sides.foe.actives) {
+          if (!(battler.index in this.participants) && !$Battle.battlers[battler.index].isFainted()) {
+            this.participants.push(battler.index);
           }
         }
 
@@ -453,6 +456,8 @@ namespace PE.Battle {
 
     damage(amt) {
       this._hp -= amt;
+      this.hpbar.damage(amt);
+      $Battle.recoverHPAnimation(this.index);
       if (this._hp <= 0) {
         this._hp = 0;
         this.faint();
@@ -468,12 +473,12 @@ namespace PE.Battle {
         console.log("!!!***Can't faint if already fainted");
         return true
       }
-      // this.battle.scene.fainted(this);
+      // $Battle.scene.fainted(this);
       this.initEffects(false);
 
       this.status = 0;
       this.statusCount = 0
-      // if (this.pokemon && this.battle.internalbattle) {
+      // if (this.pokemon && $Battle.internalbattle) {
       //   this.pokemon.changeHappiness("faint");
       // }
       // if (this.pokemon.isMega()) this.pokemon.makeUnmega();
@@ -526,11 +531,11 @@ namespace PE.Battle {
 
     get name() {
       if ($Battle.isOpposing(this.index)) {
-        if ($Battle.opponent()) return i18n._("the opposing %1", this._name);
-        return i18n._("the wild %1", this._name);
+        if ($Battle.opponent()) return i18n._("the opposing %1", this.nickname);
+        return i18n._("the wild %1", this.nickname);
       } else {
-        if ($Battle.ownedByPlayer(this.index)) return this._name;
-        return i18n._("the ally %1", this._name);
+        if ($Battle.ownedByPlayer(this.index)) return this.nickname;
+        return i18n._("the ally %1", this.nickname);
       }
     }
 
@@ -624,7 +629,7 @@ namespace PE.Battle {
 
     //------------------------------------------------------------------------------------------------------------------
     //#region Sleep
-    canSleep(attacker: Battler, showMessages: boolean, move, ignorestatus: boolean) {
+    canSleep(attacker: Battler, showMessages: boolean, move?, ignorestatus?: boolean) {
       if (this.isFainted()) return false;
       let selfSleep = attacker && attacker.index === this.index;
       if (!ignorestatus && this.status === Statuses.Sleep) {
@@ -874,8 +879,8 @@ namespace PE.Battle {
 
     //------------------------------------------------------------------------------------------------------------------
     //#region Paralize
-    canParalize() { }
-    paralize() { }
+    canParalize(attacker?, opponent?) { }
+    paralize(...args) { }
     //#endregion
     //------------------------------------------------------------------------------------------------------------------
 
@@ -883,11 +888,11 @@ namespace PE.Battle {
     //#region Burn
     /**
      * Check if the Pokémon can be burned.
-     * @param attacker The Attacter Pokémon if exist
-     * @param showMessages Show or not the info messages
-     * @param move the move used
+     * this.param attacker The Attacter Pokémon if exist
+     * this.param showMessages Show or not the info messages
+     * this.param move the move used
      */
-    conBurn(attacker: Battler, showMessages: boolean, move: any = undefined) {
+    canBurn(attacker: Battler, showMessages: boolean, move: any = undefined) {
       if (this._fainted) return false;
       if (this.status === Statuses.Burn) {
         if (showMessages) $Battle.showMessage(i18n._("%1 already has a burn.", this.name));
@@ -935,7 +940,7 @@ namespace PE.Battle {
 
     /**
      * Check if the Pokémon can be **burned** by **Synchronize** ability
-     * @param opponent The ability Pokémon user
+     * this.param opponent The ability Pokémon user
      */
     canBurnSynchronize(opponent: Battler) {
       if (this._fainted) return false;
@@ -963,13 +968,13 @@ namespace PE.Battle {
 
     /**
      * Burn the Pokémon, sets the Pokémon ststaus to burn.
-     * @param attacker the attacker Pokémon if exist
-     * @param msg custom info message
+     * this.param attacker the attacker Pokémon if exist
+     * this.param msg custom info message
      */
     burn(attacker: Battler = undefined, msg: string = undefined) {
       this.status = Statuses.Burn;
       this.statusCount = 0;
-      // @battle.pbCommonAnimation("Burn",self,nil)
+      // $Battle.pbCommonAnimation("Burn",self,nil)
       if (msg && msg != "") $Battle.showMessage(msg);
       else $Battle.showMessage(i18n._("%1 was burned!", this.name))
       console.log("[Status change] #{this.name} was burned");
@@ -1072,7 +1077,7 @@ namespace PE.Battle {
           if (ignoreContrary) {
             if (showMessages) $Battle.showMessage(i18n._("%1's %2 activated!", this.name, Abilities.name(this.ability)))
           }
-          // if (showanim) @battle.pbCommonAnimation("StatUp",self,nil)
+          // if (showanim) $Battle.pbCommonAnimation("StatUp",self,nil)
           let texts = [];
           if (attacker.index === this.index) {
             texts = [
@@ -1110,12 +1115,12 @@ namespace PE.Battle {
      * Tickle (04A) and Noble Roar (13A) can't use this, but replicate it instead.
      * (Reason is they lowers more than 1 stat independently, and therefore could
      * show certain messages twice which is undesirable.)
-     * @param stat The stat to check
-     * @param attacker The Attacker pokémon
-     * @param showMessages Show Info messages
-     * @param move The move used
-     * @param moldbreaker
-     * @param ignoreContrary
+     * this.param stat The stat to check
+     * this.param attacker The Attacker pokémon
+     * this.param showMessages Show Info messages
+     * this.param move The move used
+     * this.param moldbreaker
+     * this.param ignoreContrary
      */
     canReduceStatStage(stat: Stats, attacker: Battler = undefined, showMessages = false, move: any = undefined,
       moldbreaker = false, ignoreContrary = false) {
@@ -1329,9 +1334,62 @@ namespace PE.Battle {
     //==================================================================================================================
 
 
+    reduceHP(...args) {
+      return 0;
+    }
+
+    recoverHP(...arg) {
+      return 0;
+    }
+
+
     get partner() {
       return this;
     }
+
+    cureStatus(...args) {
+      throw Error('Not Implemented');
+    }
+    cureConfusion(...args) {
+      throw Error('Not Implemented');
+    }
+    cureAttract(...args) {
+      throw Error('Not Implemented');
+    }
+
+
+    //==================================================================================================================
+    // Held item effects
+    //==================================================================================================================
+    consumeItem(recycle = true, pickup = true) {
+      let itemname = Items.name(this.item);
+      if (recycle) this.pokemon.itemRecycle = this.item
+      if (this.pokemon.itemInitial == this.item) this.pokemon.itemInitial = undefined;
+      if (pickup) {
+
+        this.effects.PickupItem = this.item
+        this.effects.PickupUse = $Battle.nextPickupUse()
+      }
+      this.item = undefined;
+      this.effects.Unburden = true;
+      // Symbiosis
+      // if pbPartner && pbPartner.hasWorkingAbility(:SYMBIOSIS) && recycle
+      //   if pbPartner.item>0 &&
+      //      !$Battle.isUnlosableItem(this.partner(),pbPartner.item) &&
+      //      !$Battle.isUnlosableItem(self,pbPartner.item)
+      //     $Battle.pbDisplay(_INTL("{1}'s {2} let it share its {3} with {4}!",
+      //        pbPartner.pbThis,PBAbilities.getName(pbPartner.ability),
+      //        Items.name(pbPartner.item),pbThis(true)));
+      //     this.item=pbPartner.item
+      //     pbPartner.item=0
+      //     pbPartner.effects.Unburden=true
+      //     pbBerryCureCheck
+      //   end
+      // end
+    }
+
+
+
 
   }
 }

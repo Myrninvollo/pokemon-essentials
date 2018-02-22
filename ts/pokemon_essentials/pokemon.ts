@@ -23,7 +23,7 @@ namespace PE.Pokemon {
     color = 0;
     rareness = 0;
     stepsToHatch = 0;
-    growthRate = "NORMAL";
+    growthRate: Experience;
     baseSpecies = null;
     forme = null;
     gender = null;
@@ -31,8 +31,11 @@ namespace PE.Pokemon {
     pokedex = "";
     genderRatio = { M: .5, F: .5 };
   }
-
+  
   export class Pokemon extends PokemonData {
+    exp: number;
+    itemRecycle: string;
+    itemInitial: string;
     statusCount: number;
     status: Statuses;
     ability: string;
@@ -74,6 +77,8 @@ namespace PE.Pokemon {
 
       this.level = Math.min(SETTINGS.MAXIMUM_LEVEL, level);
       if (!this.gender) this.gender = Math.random() < this.genderRatio.M ? "M" : "F";
+
+      this.exp = Experience.getExpByLevel(this.growthRate, this.level);
 
       this.nature = nature || Utils.getRandomFromEnum(Natures);
 
@@ -167,6 +172,22 @@ namespace PE.Pokemon {
       }
       return moveset;
     }
+
+    gainExp(amt) {
+      this.exp += amt;
+      let done = false;
+      while (!done) {
+        if (Experience.getExpByLevel(this.growthRate, this.level + 1) < this.exp) {
+          this.levelUp();
+        } else {
+          done = true;
+        }
+      }
+    }
+
+    levelUp() {
+
+    }
   }
 
   export function getRandomPokemon() {
@@ -174,5 +195,14 @@ namespace PE.Pokemon {
     var level = Math.randomInt(SETTINGS.MAXIMUM_LEVEL) + 1;
     var species = Object.keys($PE_POKEDEX)[inx];
     return new Pokemon(species, level);
+  }
+
+  export function getRandomParty(length) {
+    if (length > 6) length = 6;
+    let party: Pokemon[] = [];
+    for (let i = 0; i < length; i++) {
+      party.push(getRandomPokemon());
+    }
+    return party;
   }
 }

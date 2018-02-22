@@ -112,8 +112,11 @@ namespace PE.TitleScenes {
       DataManager.setupNewGame();
       this._commandWindow.close();
       this.fadeOutAll();
-      SceneManager.goto(Battle.Scene_Battle);
-      SceneManager.prepareNextScene(PE.Pokemon.getRandomPokemon(), PE.Pokemon.getRandomPokemon());
+      SceneManager.goto(PE.Battle.Scene_Battle);
+      $Player.party = PE.Pokemon.getRandomParty(6);
+      // $Player.party = [new Pokemon.Pokemon(Pokedex.GROUDON, 100)];
+      $Battle.setup([Trainers.RandomTrainer()], []);
+      $Battle.start();
     };
 
     commandMap() {
@@ -153,6 +156,28 @@ namespace PE.TitleScenes {
     }
     windowWidth() {
       return 180;
+    }
+  }
+
+  export class Window_SelectPokemon extends Window_Command {
+    makeCommandList() {
+      for (const pokemon in Pokedex) {
+        if (Pokedex.hasOwnProperty(pokemon)) {
+          this.addCommand(pokemon, 'pokemon');
+        }
+      }
+    }
+
+    updatePlacement() {
+      this.x = (Graphics.boxWidth - this.width);
+      this.y = Graphics.boxHeight - this.height;
+    }
+
+    windowWidth() {
+      return 260;
+    }
+    numVisibleRows() {
+      return 9;
     }
   }
 }

@@ -23,6 +23,10 @@ namespace PE.Utils {
     return msg[0].toUpperCase() + msg.substr(1);
   }
 
+  export function chance(chance: number) {
+    return Math.randomInt(100) < chance;
+  }
+
   export function range(range) {
     return Array.apply(null, Array(range)).map(function (_, i) { return i; });
   }
