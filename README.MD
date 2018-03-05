@@ -4,27 +4,38 @@ Pokémon Essentials is a Pokémon game project made in RPG Maker MV. Based on th
 
 
 ## Getting Started
-This is a standalone version of a RPG Maker MV project, not need the RPG Maker Editor to run.
+This project don't use the RPG Maker MV editor, a custom editor is under construction. But right now,
+ to launch and test the game you will need download and install some software. Follow the following steps
+ setup a development environment.
 
-### Prerequisites
+1. Download and install [Node Js](https://nodejs.org/en/download/)
+2. Download and install [NW JS](https://nwjs.io/) via npm
+    ```
+    npm install -g nw --nwjs_build_type=sdk
+    ```
+3. Download code editor whit Javascript support. I recommend [Atom](https://atom.io/) or [VS Code](https://code.visualstudio.com/) or [Sublime text](https://www.sublimetext.com/) they are  great options.
 
-* [Node JS and npm](https://nodejs.org/en/download/)
-* [TypeScript](https://www.typescriptlang.org/index.html#download-links)
-* [NW.JS](https://nwjs.io/)
+## Installing
+Once you have setup the development environment follow the following steps to install the project on your machine:
 
+1. Copy the repository to your machine using git clone or just download and unzip wherever you want.
 
-### Installing
+    ```
+    git clone https://github.com/pokemon-essentials/pokemon-essentials
+    ```
+2. Donwload aditional assets
 
-Copy the repository to your machine.
+    Some graphics like the Pokémon Battlers sprites and icons are not include in this repository.
+    You can download the missing assets from [here](https://drive.google.com/drive/folders/1oXbTrwAlL1SBVLykaHS1HlZf9c-IJWLo?usp=sharing) and just uncompress each one on the root folder.
 
+### Run
+
+locate command line in the root directory of the project where is the package.json file and run ```nw .```
+
+```bash
+cd your-path-to-pokemon-essentials
+nw .
 ```
-git clone --recursive https://github.com/pokemon-essentials/pokemon-essentials
-```
-
-> the **--recursive** param in the git command will download the corescript submodule.
-
-Some graphics like the Pokémon Battlers sprites and icons are not include in this repository.
-You can download the missing graphics from [here](https://drive.google.com/drive/folders/1oXbTrwAlL1SBVLykaHS1HlZf9c-IJWLo?usp=sharing) and just uncompress on the root folder.
 
 ## License
 
